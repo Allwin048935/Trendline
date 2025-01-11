@@ -1,0 +1,120 @@
+from binance.client import Client
+from binance.enums import *
+import pandas as pd
+import ta
+import matplotlib.pyplot as plt
+import io
+from scipy.signal import find_peaks
+from datetime import datetime
+from pytz import timezone
+from PIL import Image
+from telegram import Bot
+from telegram.constants import ParseMode
+from config import *
+import asyncio
+
+# Initialize Binance client
+client = Client(BINANCE_API_KEY, BINANCE_API_SECRET)
+
+def get_historical_data(symbol, interval, limit):
+    """Fetches historical price data from Binance"""
+    klines = client.get_historical_klines(symbol, interval, f"{limit} day ago UTC")
+    data = pd.DataFrame(klines, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume', 'close_time', 'quote_asset_volume', 'number_of_trades', 'taker_buy_base_asset_volume', 'taker_buy_quote_asset_volume', 'ignore'])
+    
+    # Convert the relevant columns to numeric
+    data['timestamp'] = pd.to_datetime(data['timestamp'], unit='ms')
+    data[['open', 'high', 'low', 'close']] = data[['open', 'high', 'low', 'close']].apply(pd.to_numeric)
+    data.set_index('timestamp', inplace=True)
+    
+    return data
+
+def find_peaks_and_valleys(data):
+    """Finds peaks and valleys for trendline detection"""
+    close_values = data['close'].to_numpy()
+    peaks, _ = find_peaks(close_values, distance=5)
+    valleys, _ = find_peaks(-close_values, distance=5)
+    return peaks, valleys
+
+def detect_trendlines(data, peaks, valleys):
+    """Detects trendlines using peaks and valleys"""
+    trendlines = {'support': [], 'resistance': []}
+    
+    # Identify support and resistance lines
+    for i in range(len(valleys) - 1):
+        for j in range(i + 1, len(valleys)):
+            if valleys[j] > valleys[i]:
+                trendlines['support'].append((valleys[i], valleys[j]))
+                break
+    
+    for i in range(len(peaks) - 1):
+        for j in range(i + 1, len(peaks)):
+            if peaks[j] > peaks[i]:
+                trendlines['resistance'].append((peaks[i], peaks[j]))
+                break
+    
+    return trendlines
+
+def plot_breakout_chart(symbol, data, trendlines):
+    """Plot breakout chart with detected trendlines and return image object"""
+    plt.figure(figsize=(12, 6))
+    plt.plot(data.index, data['close'], label='Close Price', color='blue')
+    
+    # Plot support lines
+    for line in trendlines['support']:
+        plt.plot(data.index[[line[0], line[1]]], data['close'].iloc[[line[0], line[1]]], linestyle='--', color='green', label='Support')
+    
+    # Plot resistance lines
+    for line in trendlines['resistance']:
+        plt.plot(data.index[[line[0], line[1]]], data['close'].iloc[[line[0], line[1]]], linestyle='--', color='red', label='Resistance')
+    
+    plt.title(f"Trendline Breakout Strategy - {symbol}")
+    plt.xlabel('Date')
+    plt.ylabel('Price')
+    plt.legend()
+    plt.grid(True)
+    
+    # Save image to a BytesIO object
+    img_bytes = io.BytesIO()
+    plt.savefig(img_bytes, format='png')
+    img_bytes.seek(0)
+    
+    # Close plot to release memory
+    plt.close()
+    
+    return img_bytes
+
+def breakout_strategy(symbol, interval='1h', limit=10):
+    """Trendline breakout strategy"""
+    data = get_historical_data(symbol, interval, limit)
+    
+    # Find peaks and valleys
+    peaks, valleys = find_peaks_and_valleys(data)
+    
+    # Detect trendlines
+    trendlines = detect_trendlines(data, peaks, valleys)
+    
+    # Check for breakout conditions
+    breakout_detected = False
+    if trendlines['support'] or trendlines['resistance']:
+        breakout_detected = True
+    
+    return breakout_detected, data, trendlines
+
+async def send_image_to_telegram(image_bytes):
+    """Send image to Telegram"""
+    bot = Bot(token=TELEGRAM_BOT_TOKEN)
+    timestamp = datetime.now(timezone('UTC')).strftime('%Y-%m-%d %H:%M:%S %Z')
+    caption = f"Trendline Breakout detected at {timestamp}"
+    await bot.send_photo(chat_id=TELEGRAM_CHAT_ID, photo=image_bytes, caption=caption, parse_mode=ParseMode.MARKDOWN)
+
+# Example usage:
+if __name__ == '__main__':
+    symbol = 'BTCUSDT'
+    interval = '1h'
+    breakout_detected, data, trendlines = breakout_strategy(symbol, interval)
+    
+    if breakout_detected:
+        image_bytes = plot_breakout_chart(symbol, data, trendlines)
+        asyncio.run(send_image_to_telegram(image_bytes))
+    else:
+        print(f"No trendline breakout detected for {symbol} on {interval} chart.")

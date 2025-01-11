@@ -9,7 +9,9 @@ from datetime import datetime
 from pytz import timezone
 from PIL import Image
 from telegram import Bot
+from telegram.constants import ParseMode
 from config import *
+import asyncio
 
 # Initialize Binance client
 client = Client(BINANCE_API_KEY, BINANCE_API_SECRET)
@@ -87,12 +89,12 @@ def breakout_strategy(symbol, interval='1h', limit=10):
     else:
         return False, data, []
 
-def send_image_to_telegram(image_bytes):
+async def send_image_to_telegram(image_bytes):
     """Send image to Telegram"""
     bot = Bot(token=TELEGRAM_BOT_TOKEN)
     timestamp = datetime.now(timezone('UTC')).strftime('%Y-%m-%d %H:%M:%S %Z')
     caption = f"Trendline Breakout detected at {timestamp}"
-    bot.send_photo(chat_id=TELEGRAM_CHAT_ID, photo=image_bytes, caption=caption)
+    await bot.send_photo(chat_id=TELEGRAM_CHAT_ID, photo=image_bytes, caption=caption, parse_mode=ParseMode.MARKDOWN)
 
 # Example usage:
 if __name__ == '__main__':
@@ -102,6 +104,6 @@ if __name__ == '__main__':
     
     if breakout_detected:
         image_bytes = plot_breakout_chart(symbol, data, trendlines)
-        send_image_to_telegram(image_bytes)
+        asyncio.run(send_image_to_telegram(image_bytes))
     else:
         print(f"No trendline breakout detected for {symbol} on {interval} chart.")

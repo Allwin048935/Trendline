@@ -53,7 +53,7 @@ def plot_breakout_chart(symbol, data, trendlines):
     
     # Plot trendlines
     for line in trendlines:
-        plt.plot(data.index[[line[0], line[1]]], data['close'][[line[0], line[1]]], linestyle='--', color='orange')
+        plt.plot(data.index[[line[0], line[1]]], data['close'].iloc[[line[0], line[1]]], linestyle='--', color='orange')
     
     plt.title(f"Trendline Breakout Strategy - {symbol}")
     plt.xlabel('Date')

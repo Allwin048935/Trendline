@@ -99,7 +99,7 @@ async def send_image_to_telegram(image_bytes):
 # Example usage:
 if __name__ == '__main__':
     symbol = 'BTCUSDT'
-    interval = '1h'
+    interval = '1d'
     breakout_detected, data, trendlines = breakout_strategy(symbol, interval)
     
     if breakout_detected:

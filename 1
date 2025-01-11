@@ -18,8 +18,12 @@ def get_historical_data(symbol, interval, limit):
     """Fetches historical price data from Binance"""
     klines = client.get_historical_klines(symbol, interval, f"{limit} day ago UTC")
     data = pd.DataFrame(klines, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume', 'close_time', 'quote_asset_volume', 'number_of_trades', 'taker_buy_base_asset_volume', 'taker_buy_quote_asset_volume', 'ignore'])
+    
+    # Convert the relevant columns to numeric
     data['timestamp'] = pd.to_datetime(data['timestamp'], unit='ms')
+    data['close'] = pd.to_numeric(data['close'])  # Convert 'close' to numeric
     data.set_index('timestamp', inplace=True)
+    
     return data
 
 def find_peaks_and_valleys(data):
@@ -93,7 +97,8 @@ def send_image_to_telegram(image_bytes):
 # Example usage:
 if __name__ == '__main__':
     symbol = 'BTCUSDT'
-    breakout_detected, data, trendlines = breakout_strategy(symbol)
+    interval = '1h'
+    breakout_detected, data, trendlines = breakout_strategy(symbol, interval)
     
     if breakout_detected:
         image_bytes = plot_breakout_chart(symbol, data, trendlines)
